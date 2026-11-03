@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>PNG ORM channel packer — free experiment</title>
+<style>
+:root{color-scheme:light;font-family:Verdana,sans-serif;color:#202d27;background:#f5f3eb;line-height:1.6}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:clamp(20px,5vw,64px)}header{border-top:5px solid #24543e;padding-top:20px;margin-bottom:36px}.eyebrow{font-size:.85rem;font-weight:bold;letter-spacing:.08em;text-transform:uppercase}h1{font:normal clamp(2rem,6vw,3.5rem)/1.1 Georgia,serif;margin:16px 0}h2{font-size:1.2rem;margin:24px 0 8px}p{max-width:72ch}.notice{border-bottom:1px solid #b6bfb3;padding-bottom:16px;font-size:.9rem}.mapping{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.mapping span{padding:8px 12px;border:1px solid #7e8b80}.controls{background:#e7ebe1;padding:20px;display:grid;gap:16px}label{display:block}input[type=file]{max-width:100%;font:inherit;font-size:.9rem}button,a.download{font:inherit;font-weight:bold;padding:12px 20px;border:1px solid #24543e;background:#24543e;color:#f5f3eb;cursor:pointer;text-decoration:none;display:inline-block}button:disabled{background:#d1d7cd;border-color:#839083;color:#38473d;cursor:not-allowed}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #ab430d;outline-offset:4px}#status{font-weight:bold}#groups,#issues{padding-left:24px;overflow-wrap:anywhere}#issues{color:#81361d}a[hidden]{display:none}.limits{font-size:.9rem;border-top:1px solid #b6bfb3;padding-top:16px;margin-top:32px}footer{font-size:.85rem;margin-top:32px}li{padding:4px 0}code{overflow-wrap:anywhere}input[type=checkbox]{width:18px;height:18px;vertical-align:middle}button{justify-self:start}@media(max-width:480px){main{padding:20px}.controls{padding:16px}h1{font-size:2.4rem}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">Free AI-developed experiment</div><h1>Pack your masks.<br>Keep the numbers.</h1><p>Combine AO, roughness and metallic masks into one PNG per material. Review the filenames first, then download the results together.</p></header>
+<p class="notice">Free experimental, AI-developed software. Not for sale. See the included README and Unlicense before use. No account, email, analytics or upload endpoint. Processing runs in this page; originals are never overwritten.</p>
+<div class="mapping" aria-label="Output channel mapping"><span>R = AO</span><span>G = roughness</span><span>B = metallic</span><span>A = 255</span></div>
+<section aria-labelledby="select-heading"><h2 id="select-heading">1. Choose your masks</h2><p>Use matching names in the same folder: <code>stone_ao.png</code>, <code>stone_roughness.png</code> and <code>stone_metallic.png</code>. Folder and material spelling must match exactly. Channel suffixes may vary in case.</p>
+<div class="controls"><label>Choose individual files from one folder (tested route)<br><input id="files" type="file" accept=".png" multiple></label><label>Or choose a folder, including subfolders (experimental and unverified)<br><input id="folder" type="file" webkitdirectory multiple></label><label><input id="invert" type="checkbox"> Invert roughness: use 255 minus the input value</label><button id="pack" disabled>Pack ready sets</button></div></section>
+<section aria-labelledby="review-heading"><h2 id="review-heading">2. Review and download</h2><p id="status" role="status" aria-live="polite">Choose a folder or files to see complete sets and exceptions.</p><ul id="groups" aria-label="Ready sets"></ul><ul id="issues" aria-label="Exceptions"></ul><a id="download" class="download" hidden download="texture-batch.zip">Download packed ZIP</a></section>
+<div class="limits"><strong>Supported in this experiment</strong><p>8-bit, non-interlaced grayscale, RGB, grayscale-alpha and RGBA PNGs, up to 4096 × 4096 and 32 MiB each. Each mask must have the same dimensions. The red input channel is used even when alpha is zero. No resizing, colour adjustment or source metadata is carried into the output.</p><p>Matched files with palette, 16-bit, animated or other unsupported PNG variants are rejected. Nonmatching filenames are ignored. Up to 500 selected files, 256 MiB total compressed input and a 128 MiB output ZIP. Large high-entropy images may exceed the encoder limit. Peak memory use is not yet measured. Requires a recent desktop browser with native compression streams; cross-browser support is not yet established.</p><p>Failed sets are skipped and explained in the ZIP report. A filename-ready set can still fail image validation. No payment or user details are requested.</p></div>
+<footer>Original AI-developed code and synthetic examples. See README for GitHub download privacy and limits; this extracted tool processes files locally. Unlicense included. Technical tests are not demand or a production reliability guarantee.</footer>
+</main>
+<script>
+/* PNG_MODULE */
+/* BATCH_MODULE */
+'use strict';
+const $ = id => document.getElementById(id);
+let plan = {groups:[],issues:[]};
+let downloadUrl = null;
+function clearDownload(){if(downloadUrl)URL.revokeObjectURL(downloadUrl);downloadUrl=null;$('download').hidden=true;$('download').removeAttribute('href');}
+function showList(id,items){$(id).replaceChildren(...items.map(text=>{const item=document.createElement('li');item.textContent=text;return item;}));}
+function selectFiles(input){
+  clearDownload();
+  const files=Array.from(input.files);
+  const total=files.reduce((sum,file)=>sum+file.size,0);
+  if(files.length>500||total>256*1024*1024||files.some(file=>file.size>32*1024*1024)){
+    plan={groups:[],issues:['Selection exceeds the 500-file, 256 MiB total or 32 MiB per-file input limit. Choose a smaller batch.']};
+  }else{plan=TextureBatch.planFiles(files);}
+  showList('groups',plan.groups.map(group=>group.key+' → '+group.outputName));
+  showList('issues',plan.issues);
+  $('status').textContent=files.length+' selected files; '+plan.groups.length+' filename-ready sets; '+plan.issues.length+' selection exceptions.';
+  $('pack').disabled=!plan.groups.length;
+}
+for(const id of ['folder','files'])$(id).addEventListener('change',()=>{const other=id==='folder'?'files':'folder';$(other).value='';selectFiles($(id));});
+$('invert').addEventListener('change',()=>{clearDownload();$('status').textContent='Mapping changed. Pack the ready sets again to apply it.';});
+$('pack').addEventListener('click',async()=>{
+  clearDownload();
+  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
+  const entries=[];const issues=[...plan.issues];let packed=0,generatedBytes=0;
+  const invertRoughness=$('invert').checked;
+  try{
+    for(const group of plan.groups){
+      $('status').textContent='Processing '+group.key+'…';
+      await new Promise(resolve=>setTimeout(resolve,0));
+      try{
+        const masks={};
+        for(const role of ['ao','roughness','metallic'])masks[role]=await TexturePng.decodePng(new Uint8Array(await group[role].arrayBuffer()));
+        const bytes=await TexturePng.encodePng(TexturePng.packOrm({...masks,invertRoughness}));
+        if(generatedBytes+bytes.length>120*1024*1024)throw new Error('Batch output payload limit of 120 MiB reached; use a smaller selection');
+        entries.push({name:group.outputName,bytes});generatedBytes+=bytes.length;packed++;
+      }catch(error){issues.push(group.key+': '+error.message);}
+    }
+    const summary=packed+' packed; '+(plan.groups.length-packed)+' failed image sets; '+issues.length+' total exceptions.';
+    const report=['PNG ORM channel packer — experimental snapshot',summary,'R=AO, G='+(invertRoughness?'inverted roughness':'roughness')+', B=metallic, A=255','Input red values used, alpha ignored. Originals unchanged.','',...issues].join('\n');
+    const usedRoots=new Set(entries.map(entry=>entry.name.split('/')[0].normalize('NFC').toLowerCase()));
+    let reportName='_texture-batch-report.txt';
+    for(let n=1;usedRoots.has(reportName);n++)reportName='_texture-batch-report-'+n+'.txt';
+    const zip=TextureBatch.makeZip([...entries,{name:reportName,bytes:new TextEncoder().encode(report)}]);
+    downloadUrl=URL.createObjectURL(new Blob([zip],{type:'application/zip'}));
+    $('download').href=downloadUrl;$('download').hidden=false;
+    showList('issues',issues);$('status').textContent=summary+' Download includes the exception report.';
+  }catch(error){$('status').textContent='No ZIP created: '+error.message;}
+  finally{for(const id of ['folder','files','invert'])$(id).disabled=false;$('pack').disabled=!plan.groups.length;}
+});
+if(typeof CompressionStream!=='function'||typeof DecompressionStream!=='function'){
+  $('status').textContent='This browser lacks native compression streams. Try a recent desktop browser.';
+  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
+}
+</script></body></html>

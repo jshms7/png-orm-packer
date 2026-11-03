@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>PNG ORM channel packer — free experiment</title>
+<style>
+:root{color-scheme:light;font-family:Verdana,sans-serif;color:#202d27;background:#f5f3eb;line-height:1.6}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:clamp(20px,5vw,64px)}header{border-top:5px solid #24543e;padding-top:20px;margin-bottom:36px}.eyebrow{font-size:.85rem;font-weight:bold;letter-spacing:.08em;text-transform:uppercase}h1{font:normal clamp(2rem,6vw,3.5rem)/1.1 Georgia,serif;margin:16px 0}h2{font-size:1.2rem;margin:24px 0 8px}p{max-width:72ch}.notice{border-bottom:1px solid #b6bfb3;padding-bottom:16px;font-size:.9rem}.mapping{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.mapping span{padding:8px 12px;border:1px solid #7e8b80}.controls{background:#e7ebe1;padding:20px;display:grid;gap:16px}label{display:block}input[type=file]{max-width:100%;font:inherit;font-size:.9rem}button,a.download{font:inherit;font-weight:bold;padding:12px 20px;border:1px solid #24543e;background:#24543e;color:#f5f3eb;cursor:pointer;text-decoration:none;display:inline-block}button:disabled{background:#d1d7cd;border-color:#839083;color:#38473d;cursor:not-allowed}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #ab430d;outline-offset:4px}#status{font-weight:bold}#groups,#issues{padding-left:24px;overflow-wrap:anywhere}#issues{color:#81361d}a[hidden]{display:none}.limits{font-size:.9rem;border-top:1px solid #b6bfb3;padding-top:16px;margin-top:32px}footer{font-size:.85rem;margin-top:32px}li{padding:4px 0}code{overflow-wrap:anywhere}input[type=checkbox]{width:18px;height:18px;vertical-align:middle}button{justify-self:start}@media(max-width:480px){main{padding:20px}.controls{padding:16px}h1{font-size:2.4rem}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">Free AI-developed experiment</div><h1>Pack your masks.<br>Keep the numbers.</h1><p>Combine AO, roughness and metallic masks into one PNG per material. Review the filenames first, then download the results together.</p></header>
+<p class="notice">Free experimental, AI-developed software. Not for sale. See the included README and Unlicense before use. No account, email, analytics or upload endpoint. Processing runs in this page; originals are never overwritten.</p>
+<div class="mapping" aria-label="Output channel mapping"><span>R = AO</span><span>G = roughness</span><span>B = metallic</span><span>A = 255</span></div>
+<section aria-labelledby="select-heading"><h2 id="select-heading">1. Choose your masks</h2><p>Use matching names in the same folder: <code>stone_ao.png</code>, <code>stone_roughness.png</code> and <code>stone_metallic.png</code>. Folder and material spelling must match exactly. Channel suffixes may vary in case.</p>
+<div class="controls"><label>Choose individual files from one folder (tested route)<br><input id="files" type="file" accept=".png" multiple></label><label>Or choose a folder, including subfolders (experimental and unverified)<br><input id="folder" type="file" webkitdirectory multiple></label><label><input id="invert" type="checkbox"> Invert roughness: use 255 minus the input value</label><button id="pack" disabled>Pack ready sets</button></div></section>
+<section aria-labelledby="review-heading"><h2 id="review-heading">2. Review and download</h2><p id="status" role="status" aria-live="polite">Choose a folder or files to see complete sets and exceptions.</p><ul id="groups" aria-label="Ready sets"></ul><ul id="issues" aria-label="Exceptions"></ul><a id="download" class="download" hidden download="texture-batch.zip">Download packed ZIP</a></section>
+<div class="limits"><strong>Supported in this experiment</strong><p>8-bit, non-interlaced grayscale, RGB, grayscale-alpha and RGBA PNGs, up to 4096 × 4096 and 32 MiB each. Each mask must have the same dimensions. The red input channel is used even when alpha is zero. No resizing, colour adjustment or source metadata is carried into the output.</p><p>Matched files with palette, 16-bit, animated or other unsupported PNG variants are rejected. Nonmatching filenames are ignored. Up to 500 selected files, 256 MiB total compressed input and a 128 MiB output ZIP. Large high-entropy images may exceed the encoder limit. Peak memory use is not yet measured. Requires a recent desktop browser with native compression streams; cross-browser support is not yet established.</p><p>Failed sets are skipped and explained in the ZIP report. A filename-ready set can still fail image validation. No payment or user details are requested.</p></div>
+<footer>Original AI-developed code and synthetic examples. See README for GitHub download privacy and limits; this extracted tool processes files locally. Unlicense included. Technical tests are not demand or a production reliability guarantee.</footer>
+</main>
+<script>
+'use strict';
+
+(function () {
+  const MAX_DIMENSION = 4096;
+  const MAX_INPUT_BYTES = 32 * 1024 * 1024;
+
+  function checkDimensions(width, height) {
+    if (!Number.isInteger(width) || !Number.isInteger(height) ||
+        width < 1 || height < 1 || width > MAX_DIMENSION || height > MAX_DIMENSION) {
+      throw new Error('Image dimensions must be integers from 1 to 4096');
+    }
+  }
+
+  function checkImage(image) {
+    if (!image || typeof image !== 'object') throw new Error('Expected decoded RGBA image');
+    checkDimensions(image.width, image.height);
+    if (!(image.data instanceof Uint8Array) || image.data.length !== image.width * image.height * 4) {
+      throw new Error('RGBA data must be a Uint8Array of width * height * 4 bytes');
+    }
+  }
+
+  function packOrm({ ao, roughness, metallic, invertRoughness = false }) {
+    for (const mask of [ao, roughness, metallic]) checkImage(mask);
+    if (roughness.width !== ao.width || roughness.height !== ao.height ||
+        metallic.width !== ao.width || metallic.height !== ao.height) {
+      throw new Error('Mask dimension mismatch');
+    }
+    if (typeof invertRoughness !== 'boolean') throw new Error('invertRoughness must be boolean');
+    const data = new Uint8Array(ao.width * ao.height * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = ao.data[i];
+      data[i + 1] = invertRoughness ? 255 - roughness.data[i] : roughness.data[i];
+      data[i + 2] = metallic.data[i];
+      data[i + 3] = 255;
+    }
+    return { width: ao.width, height: ao.height, data };
+  }
+
+  const SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const CRC_TABLE = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let value = n;
+    for (let bit = 0; bit < 8; bit++) value = value & 1 ? (value >>> 1) ^ 0xedb88320 : value >>> 1;
+    CRC_TABLE[n] = value >>> 0;
+  }
+
+  function crc32(bytes) {
+    let value = 0xffffffff;
+    for (const byte of bytes) value = (value >>> 8) ^ CRC_TABLE[(value ^ byte) & 255];
+    return (value ^ 0xffffffff) >>> 0;
+  }
+
+  // Never collect unbounded inflated output. Cancel the stream on the first
+  // oversized chunk, before copying any of that chunk into the fixed buffer.
+  async function inflateExact(compressed, expected) {
+    if (typeof DecompressionStream !== 'function') throw new Error('DecompressionStream is required');
+    let position = 0;
+    const source = new ReadableStream({
+      pull(controller) {
+        if (position === compressed.length) return controller.close();
+        const end = Math.min(position + 16384, compressed.length);
+        controller.enqueue(compressed.subarray(position, end));
+        position = end;
+      }
+    });
+    const reader = source.pipeThrough(new DecompressionStream('deflate')).getReader();
+    const output = new Uint8Array(expected);
+    let used = 0;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value.length > expected - used) {
+          throw new Error('PNG decompressed data exceeds expected size');
+        }
+        output.set(value, used);
+        used += value.length;
+      }
+      if (used !== expected) throw new Error('PNG decompressed size does not match expected size');
+      return output;
+    } catch (error) {
+      await reader.cancel(error).catch(() => {});
+      throw new Error('Invalid PNG compressed data: ' + error.message);
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async function decodePng(bytes) {
+    if (!(bytes instanceof Uint8Array)) throw new Error('PNG input must be Uint8Array');
+    if (bytes.length > MAX_INPUT_BYTES) throw new Error('PNG input exceeds 32 MiB limit');
+    if (bytes.length < 8 || !SIGNATURE.every((byte, i) => bytes[i] === byte)) {
+      throw new Error('Invalid PNG signature');
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const parts = [];
+    let width, height, colorType, channels, offset = 8, size = 0;
+    let seenHeader = false, seenData = false, dataEnded = false, seenEnd = false;
+    let transparency = null, seenPalette = false;
+    let chunkCount = 0;
+    while (offset < bytes.length) {
+      if (++chunkCount > 65536) throw new Error('PNG chunk count exceeds limit of 65536');
+      if (bytes.length - offset < 12) throw new Error('Truncated PNG chunk');
+      const length = view.getUint32(offset);
+      if (length > bytes.length - offset - 12) throw new Error('Truncated PNG chunk');
+      const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+      const data = bytes.subarray(offset + 8, offset + 8 + length);
+      if (!/^[A-Za-z]{4}$/.test(type) || (bytes[offset + 6] & 32)) {
+        throw new Error('Invalid PNG chunk name or reserved bit');
+      }
+      if (crc32(bytes.subarray(offset + 4, offset + 8 + length)) !== view.getUint32(offset + 8 + length)) {
+        throw new Error('PNG CRC mismatch in ' + type);
+      }
+      if (!seenHeader && type !== 'IHDR') throw new Error('PNG IHDR must be first');
+      if (seenData && type !== 'IDAT') dataEnded = true;
+      if (type === 'IHDR') {
+        if (seenHeader) throw new Error('Duplicate PNG IHDR');
+        if (length !== 13) throw new Error('Invalid PNG IHDR');
+        seenHeader = true;
+        width = view.getUint32(offset + 8);
+        height = view.getUint32(offset + 12);
+        checkDimensions(width, height);
+        colorType = data[9];
+        channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[colorType];
+        if (data[8] !== 8) throw new Error('Unsupported PNG bit depth; only 8-bit is supported');
+        if (!channels) throw new Error('Unsupported PNG color type (palette is not supported)');
+        if (data[10] || data[11]) throw new Error('Unsupported PNG compression or filter method');
+        if (data[12]) throw new Error('Unsupported PNG interlace method');
+      } else if (type === 'IDAT') {
+        if (dataEnded) throw new Error('PNG IDAT chunks must be consecutive');
+        seenData = true;
+        parts.push(data);
+        size += length;
+      } else if (type === 'IEND') {
+        if (length !== 0 || !seenData) throw new Error('Invalid PNG IEND or missing IDAT');
+        seenEnd = true;
+        if (offset + 12 !== bytes.length) throw new Error('Trailing bytes after PNG IEND');
+      } else if (type === 'tRNS') {
+        if (seenData || transparency || (colorType !== 0 && colorType !== 2) ||
+            length !== (colorType === 0 ? 2 : 6)) {
+          throw new Error('Invalid PNG tRNS transparency');
+        }
+        transparency = [];
+        for (let i = 0; i < length; i += 2) {
+          if (data[i] !== 0) throw new Error('PNG tRNS sample exceeds 8-bit range');
+          transparency.push(data[i + 1]);
+        }
+      } else if (type === 'PLTE') {
+        if (seenPalette || seenData || transparency || (colorType !== 2 && colorType !== 6) ||
+            !length || length > 768 || length % 3) {
+          throw new Error('Invalid PNG optional PLTE');
+        }
+        seenPalette = true;
+      } else if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
+        throw new Error('Unsupported PNG animation (APNG)');
+      } else if (!(bytes[offset + 4] & 32)) {
+        throw new Error('Unsupported PNG critical chunk: ' + type);
+      }
+      offset += length + 12;
+    }
+    if (!seenHeader || !seenData || !seenEnd) throw new Error('Missing PNG IHDR, IDAT or IEND');
+    checkDimensions(width, height);
+    const compressed = new Uint8Array(size);
+    let cursor = 0;
+    for (const part of parts) { compressed.set(part, cursor); cursor += part.length; }
+    const stride = width * channels;
+    const raw = await inflateExact(compressed, height * (1 + stride));
+    const data = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      const row = y * (stride + 1);
+      const filter = raw[row];
+      if (filter > 4) throw new Error('Invalid PNG filter (expected 0 to 4)');
+      for (let x = 0; x < stride; x++) {
+        const at = row + 1 + x;
+        const left = x >= channels ? raw[at - channels] : 0;
+        const up = y ? raw[at - stride - 1] : 0;
+        const upperLeft = y && x >= channels ? raw[at - stride - 1 - channels] : 0;
+        let predictor = 0;
+        if (filter === 1) predictor = left;
+        else if (filter === 2) predictor = up;
+        else if (filter === 3) predictor = Math.floor((left + up) / 2);
+        else if (filter === 4) {
+          const estimate = left + up - upperLeft;
+          const a = Math.abs(estimate - left);
+          const b = Math.abs(estimate - up);
+          const c = Math.abs(estimate - upperLeft);
+          predictor = a <= b && a <= c ? left : b <= c ? up : upperLeft;
+        }
+        raw[at] = (raw[at] + predictor) & 255;
+      }
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const sample = row + 1 + x * channels;
+        data[i] = raw[sample];
+        data[i + 1] = colorType === 0 || colorType === 4 ? raw[sample] : raw[sample + 1];
+        data[i + 2] = colorType === 0 || colorType === 4 ? raw[sample] : raw[sample + 2];
+        data[i + 3] = colorType === 4 ? raw[sample + 1] : colorType === 6 ? raw[sample + 3] : 255;
+        if (transparency && raw[sample] === transparency[0] &&
+            (colorType === 0 || (raw[sample + 1] === transparency[1] && raw[sample + 2] === transparency[2]))) {
+          data[i + 3] = 0;
+        }
+      }
+    }
+    return { width, height, data };
+  }
+
+  function makeChunk(type, data = new Uint8Array(0)) {
+    const chunk = new Uint8Array(data.length + 12);
+    const view = new DataView(chunk.buffer);
+    view.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) chunk[4 + i] = type.charCodeAt(i);
+    chunk.set(data, 8);
+    view.setUint32(data.length + 8, crc32(chunk.subarray(4, data.length + 8)));
+    return chunk;
+  }
+
+  async function encodePng(image) {
+    checkImage(image);
+    if (typeof CompressionStream !== 'function') throw new Error('CompressionStream is required');
+    const { width, height, data } = image;
+    const stride = width * 4;
+    const raw = new Uint8Array(height * (stride + 1));
+    for (let row = 0; row < height; row++) {
+      raw.set(data.subarray(row * stride, (row + 1) * stride), row * (stride + 1) + 1);
+    }
+    let position = 0;
+    const source = new ReadableStream({
+      pull(controller) {
+        if (position === raw.length) return controller.close();
+        const end = Math.min(position + 16384, raw.length);
+        controller.enqueue(raw.subarray(position, end));
+        position = end;
+      }
+    });
+    const reader = source.pipeThrough(new CompressionStream('deflate')).getReader();
+    const parts = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        // One IHDR, one IDAT and one IEND add 57 bytes including signature.
+        if (value.length > MAX_INPUT_BYTES - 57 - size) throw new Error('Encoded PNG exceeds 32 MiB limit');
+        parts.push(value);
+        size += value.length;
+      }
+    } catch (error) {
+      await reader.cancel(error).catch(() => {});
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+    const compressed = new Uint8Array(size);
+    let cursor = 0;
+    for (const part of parts) { compressed.set(part, cursor); cursor += part.length; }
+    const header = new Uint8Array(13);
+    const view = new DataView(header.buffer);
+    view.setUint32(0, width);
+    view.setUint32(4, height);
+    header[8] = 8;
+    header[9] = 6;
+    const chunks = [SIGNATURE, makeChunk('IHDR', header), makeChunk('IDAT', compressed), makeChunk('IEND')];
+    const result = new Uint8Array(size + 57);
+    cursor = 0;
+    for (const chunk of chunks) { result.set(chunk, cursor); cursor += chunk.length; }
+    return result;
+  }
+
+  const api = { decodePng, encodePng, packOrm };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else globalThis.TexturePng = api;
+})();
+
+'use strict';
+
+(function () {
+  const fold = value => value.normalize('NFC').toLowerCase();
+  const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+  const encoder = new TextEncoder();
+
+  function safePath(path) {
+    if (typeof path !== 'string' || !path || encoder.encode(path).length > 4096 ||
+        /[\\\\:<>"|?*]|[\p{Cc}\p{Cf}\p{Cs}]/u.test(path)) {
+      throw new Error('unsafe or invalid relative path');
+    }
+    for (const part of path.split('/')) {
+      if (!part || part === '.' || part === '..' || part.trim() !== part || part.endsWith('.') ||
+          encoder.encode(part).length > 255 || /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(part.split('.')[0].trimEnd())) {
+        throw new Error('unsafe or invalid path component');
+      }
+    }
+    return path;
+  }
+
+  // Return all leaf IDs involved in a duplicate, alias or file/directory conflict.
+  function namespaceConflicts(paths) {
+    const nodes = new Map();
+    for (const path of paths) {
+      const parts = path.split('/');
+      for (let index = 1; index <= parts.length; index++) {
+        const spelling = parts.slice(0, index).join('/');
+        const id = fold(spelling);
+        if (!nodes.has(id)) nodes.set(id, { spelling, alias: false, files: 0, directory: false });
+        const node = nodes.get(id);
+        if (node.spelling !== spelling) node.alias = true;
+        if (index === parts.length) node.files++;
+        else node.directory = true;
+      }
+    }
+    const bad = new Set([...nodes].filter(([, node]) => node.alias || node.files > 1 ||
+      (node.files && node.directory)).map(([id]) => id));
+    const conflicts = new Set();
+    for (const path of paths) {
+      const parts = path.split('/');
+      if (parts.some((_, index) => bad.has(fold(parts.slice(0, index + 1).join('/'))))) conflicts.add(fold(path));
+    }
+    return conflicts;
+  }
+
+  function planFiles(files) {
+    if (!Array.isArray(files)) throw new TypeError('files must be an array');
+    const candidates = new Map();
+    const paths = new Map();
+    const sourcePaths = [];
+    const issues = [];
+    for (const file of files) {
+      let path;
+      try {
+        if (!file || typeof file.name !== 'string' || file.name.includes('/') ||
+            (file.webkitRelativePath !== undefined && typeof file.webkitRelativePath !== 'string')) {
+          throw new Error('invalid file metadata');
+        }
+        safePath(file.name);
+        path = safePath(file.webkitRelativePath || file.name);
+        if (path.split('/').at(-1) !== file.name) throw new Error('invalid file name/path mismatch');
+      } catch (error) {
+        issues.push(`Rejected ${JSON.stringify(file && file.name)}: ${error.message}.`);
+        continue;
+      }
+      sourcePaths.push(path);
+      const pathId = fold(path);
+      paths.set(pathId, (paths.get(pathId) || 0) + 1);
+      const slash = path.lastIndexOf('/');
+      const match = /^(.*)_(ao|roughness|metallic)\.png$/i.exec(path.slice(slash + 1));
+      if (!match) continue;
+      const key = path.slice(0, slash + 1) + match[1];
+      try {
+        safePath(key);
+        safePath(`${key}_orm.png`);
+      } catch (error) {
+        issues.push(`Rejected ${JSON.stringify(path)}: unsafe or empty material stem.`);
+        continue;
+      }
+      const id = fold(key);
+      if (!candidates.has(id)) candidates.set(id, { keys: new Set(), channels: { ao: [], roughness: [], metallic: [] }, paths: [] });
+      const candidate = candidates.get(id);
+      candidate.keys.add(key);
+      candidate.channels[match[2].toLowerCase()].push(file);
+      candidate.paths.push(pathId);
+    }
+    const groups = [];
+    for (const candidate of candidates.values()) {
+      const key = [...candidate.keys].sort()[0];
+      const outputName = `${key}_orm.png`;
+      if (candidate.keys.size !== 1 || candidate.paths.some(path => paths.get(path) > 1) ||
+          Object.values(candidate.channels).some(matches => matches.length > 1)) {
+        issues.push(`${key}: ambiguous or duplicate source path collision; group skipped.`);
+        continue;
+      }
+      if (paths.has(fold(outputName))) {
+        issues.push(`${key}: output/source path collision; group skipped.`);
+        continue;
+      }
+      const missing = ['ao', 'roughness', 'metallic'].filter(channel => !candidate.channels[channel].length);
+      if (missing.length) issues.push(`${key}: missing ${missing.join(', ')}.`);
+      else groups.push({ key, outputName, ao: candidate.channels.ao[0], roughness: candidate.channels.roughness[0], metallic: candidate.channels.metallic[0] });
+    }
+    const conflicts = namespaceConflicts([...sourcePaths, ...groups.map(group => group.outputName)]);
+    const safeGroups = groups.filter(group => {
+      const groupPaths = [group.outputName, ...[group.ao, group.roughness, group.metallic].map(file => file.webkitRelativePath || file.name)];
+      if (!groupPaths.some(path => conflicts.has(fold(path)))) return true;
+      issues.push(`${group.key}: ambiguous directory or file/output namespace collision; group skipped.`);
+      return false;
+    });
+    safeGroups.sort((a, b) => compare(a.key, b.key));
+    return { groups: safeGroups, issues: issues.sort() };
+  }
+  const crcTable = Uint32Array.from({ length: 256 }, (_, index) => {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+    return crc >>> 0;
+  });
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (const byte of bytes) crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 255];
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function makeZip(entries) {
+    if (!Array.isArray(entries)) throw new TypeError('entries must be an array');
+    if (entries.length > 10000) throw new RangeError('ZIP entry count limit is 10000 (no Zip64)');
+    const records = [];
+    for (const entry of entries) {
+      if (!entry || !(entry.bytes instanceof Uint8Array)) throw new TypeError('invalid entry: bytes must be Uint8Array');
+      const name = safePath(entry.name);
+      records.push({ name, bytes: entry.bytes, encodedName: encoder.encode(name) });
+    }
+    if (namespaceConflicts(records.map(entry => entry.name)).size) {
+      throw new Error('duplicate, ambiguous or file/directory path collision');
+    }
+    records.sort((a, b) => compare(a.name, b.name));
+    const localSize = records.reduce((size, entry) => size + 30 + entry.encodedName.length + entry.bytes.length, 0);
+    const centralSize = records.reduce((size, entry) => size + 46 + entry.encodedName.length, 0);
+    if (localSize + centralSize + 22 > 128 * 1024 * 1024) {
+      throw new RangeError('ZIP total size limit is 128 MiB including metadata (no Zip64)');
+    }
+    const output = new Uint8Array(localSize + centralSize + 22);
+    const view = new DataView(output.buffer);
+    const u16 = (offset, value) => view.setUint16(offset, value, true);
+    const u32 = (offset, value) => view.setUint32(offset, value, true);
+    let offset = 0;
+    for (const entry of records) {
+      entry.offset = offset;
+      entry.crc = crc32(entry.bytes);
+      u32(offset, 0x04034b50);
+      u16(offset + 4, 20);
+      u16(offset + 6, 0x800);
+      // Stored (method 0), time 00:00:00, date 1980-01-01; no host clock.
+      u16(offset + 12, 33);
+      u32(offset + 14, entry.crc);
+      u32(offset + 18, entry.bytes.length);
+      u32(offset + 22, entry.bytes.length);
+      u16(offset + 26, entry.encodedName.length);
+      output.set(entry.encodedName, offset + 30);
+      output.set(entry.bytes, offset + 30 + entry.encodedName.length);
+      offset += 30 + entry.encodedName.length + entry.bytes.length;
+    }
+    for (const entry of records) {
+      u32(offset, 0x02014b50);
+      u16(offset + 4, 20);
+      u16(offset + 6, 20);
+      u16(offset + 8, 0x800);
+      u16(offset + 14, 33);
+      u32(offset + 16, entry.crc);
+      u32(offset + 20, entry.bytes.length);
+      u32(offset + 24, entry.bytes.length);
+      u16(offset + 28, entry.encodedName.length);
+      u32(offset + 42, entry.offset);
+      output.set(entry.encodedName, offset + 46);
+      offset += 46 + entry.encodedName.length;
+    }
+    u32(offset, 0x06054b50);
+    u16(offset + 8, records.length);
+    u16(offset + 10, records.length);
+    u32(offset + 12, centralSize);
+    u32(offset + 16, localSize);
+    return output;
+  }
+
+  const api = { planFiles, makeZip };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  globalThis.TextureBatch = api;
+})();
+
+'use strict';
+const $ = id => document.getElementById(id);
+let plan = {groups:[],issues:[]};
+let downloadUrl = null;
+function clearDownload(){if(downloadUrl)URL.revokeObjectURL(downloadUrl);downloadUrl=null;$('download').hidden=true;$('download').removeAttribute('href');}
+function showList(id,items){$(id).replaceChildren(...items.map(text=>{const item=document.createElement('li');item.textContent=text;return item;}));}
+function selectFiles(input){
+  clearDownload();
+  const files=Array.from(input.files);
+  const total=files.reduce((sum,file)=>sum+file.size,0);
+  if(files.length>500||total>256*1024*1024||files.some(file=>file.size>32*1024*1024)){
+    plan={groups:[],issues:['Selection exceeds the 500-file, 256 MiB total or 32 MiB per-file input limit. Choose a smaller batch.']};
+  }else{plan=TextureBatch.planFiles(files);}
+  showList('groups',plan.groups.map(group=>group.key+' → '+group.outputName));
+  showList('issues',plan.issues);
+  $('status').textContent=files.length+' selected files; '+plan.groups.length+' filename-ready sets; '+plan.issues.length+' selection exceptions.';
+  $('pack').disabled=!plan.groups.length;
+}
+for(const id of ['folder','files'])$(id).addEventListener('change',()=>{const other=id==='folder'?'files':'folder';$(other).value='';selectFiles($(id));});
+$('invert').addEventListener('change',()=>{clearDownload();$('status').textContent='Mapping changed. Pack the ready sets again to apply it.';});
+$('pack').addEventListener('click',async()=>{
+  clearDownload();
+  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
+  const entries=[];const issues=[...plan.issues];let packed=0,generatedBytes=0;
+  const invertRoughness=$('invert').checked;
+  try{
+    for(const group of plan.groups){
+      $('status').textContent='Processing '+group.key+'…';
+      await new Promise(resolve=>setTimeout(resolve,0));
+      try{
+        const masks={};
+        for(const role of ['ao','roughness','metallic'])masks[role]=await TexturePng.decodePng(new Uint8Array(await group[role].arrayBuffer()));
+        const bytes=await TexturePng.encodePng(TexturePng.packOrm({...masks,invertRoughness}));
+        if(generatedBytes+bytes.length>120*1024*1024)throw new Error('Batch output payload limit of 120 MiB reached; use a smaller selection');
+        entries.push({name:group.outputName,bytes});generatedBytes+=bytes.length;packed++;
+      }catch(error){issues.push(group.key+': '+error.message);}
+    }
+    const summary=packed+' packed; '+(plan.groups.length-packed)+' failed image sets; '+issues.length+' total exceptions.';
+    const report=['PNG ORM channel packer — experimental snapshot',summary,'R=AO, G='+(invertRoughness?'inverted roughness':'roughness')+', B=metallic, A=255','Input red values used, alpha ignored. Originals unchanged.','',...issues].join('\n');
+    const usedRoots=new Set(entries.map(entry=>entry.name.split('/')[0].normalize('NFC').toLowerCase()));
+    let reportName='_texture-batch-report.txt';
+    for(let n=1;usedRoots.has(reportName);n++)reportName='_texture-batch-report-'+n+'.txt';
+    const zip=TextureBatch.makeZip([...entries,{name:reportName,bytes:new TextEncoder().encode(report)}]);
+    downloadUrl=URL.createObjectURL(new Blob([zip],{type:'application/zip'}));
+    $('download').href=downloadUrl;$('download').hidden=false;
+    showList('issues',issues);$('status').textContent=summary+' Download includes the exception report.';
+  }catch(error){$('status').textContent='No ZIP created: '+error.message;}
+  finally{for(const id of ['folder','files','invert'])$(id).disabled=false;$('pack').disabled=!plan.groups.length;}
+});
+if(typeof CompressionStream!=='function'||typeof DecompressionStream!=='function'){
+  $('status').textContent='This browser lacks native compression streams. Try a recent desktop browser.';
+  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
+}
+</script></body></html>
