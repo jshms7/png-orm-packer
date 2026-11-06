@@ -1,27 +1,41 @@
-# PNG ORM channel packer
+# PNG ORM channel packer · v0.2
 
-Free experimental, AI-developed software for combining ambient occlusion (AO), roughness and metallic texture masks into ORM PNGs. A downloadable local tool, not an online conversion service or a paid product.
+Batch ambient occlusion, roughness and metallic masks into exact numeric ORM PNGs. Open one HTML file locally; no installation, upload, account or tracking.
 
-## Use
+![ORM batch packing in Chrome](screenshot.png)
 
-Extract the download ZIP and open `texture-batch.html` in a recent desktop browser with native CompressionStream and DecompressionStream support. No installation, tool account or product API key is needed.
+## Three-step quick start
 
-1. Choose individual PNG files from one folder. Start with the six original synthetic files in `examples/`.
-2. Match names such as `stone_ao.png`, `stone_roughness.png`, `stone_metallic.png`. Directory and material spelling must match exactly; channel suffixes are case-insensitive.
-3. Review the ready sets, then select **Pack ready sets** and **Download packed ZIP**. Nonmatching filenames are ignored, not listed as exceptions.
-4. Each set becomes one `_orm.png`. The included text report explains selection exceptions and failed matched sets. Try the examples before relying on a result.
+1. **Open and select.** Extract this ZIP, open `texture-batch.html` in desktop Chrome or Firefox, then choose the individual PNGs together from one folder. Try all six labelled synthetic files in `examples/` first. For your own material, use matching names such as `stone_ao.png`, `stone_roughness.png`, `stone_metallic.png`.
+2. **Review and pack.** Check the listed output names and exceptions, choose roughness inversion only if required, then click **Pack ready sets**. Names are checked before processing; image validation happens during packing. Failed sets leave **Ready sets**; successful sets stay available. Changing inversion does not retry failed sets. Correct the inputs and select the files again to retry them.
+3. **Download.** Click **Download packed ZIP**. Each successful set produces an `_orm.png`. The included text report explains skipped/failed sets. If all sets fail, the ZIP contains only the report. The six synthetic examples produce two images and no exceptions.
 
-R = AO red-channel byte, G = roughness red-channel byte, B = metallic red-channel byte, A = 255. Input alpha does not change these values. Optional roughness inversion uses 255 minus the input value. There is no resizing or colour adjustment. Originals are read, never overwritten.
+Material stems must match exactly; channel suffixes are case-insensitive. Other filenames are ignored. Rename library-specific suffixes yourself; no automatic map-name conversion or folder selection is included.
 
-The folder picker is experimental and unverified. The tested route is individual-file selection in Linux desktop HeadlessChrome145. That is not a claim of broad browser, operating-system or game-engine compatibility. Numeric output checks use original synthetic fixtures, not customer validation.
+## Exact mapping
 
-## Limits
+| Output | Input value |
+| --- | --- |
+| Red | AO red-channel byte |
+| Green | Roughness red-channel byte, or `255 − byte` when inversion is selected |
+| Blue | Metallic red-channel byte |
+| Alpha | 255 |
 
-Only8-bit, non-interlaced grayscale/RGB/grayscale-alpha/RGBA PNGs. No palette,16-bit,animated PNGs or other formats. All three masks must have the same dimensions. Up to4096x4096 and32MiB per input file;500files and256MiB compressed input total. Encoded images also have a32MiB limit, so large noisy images can fail even below the dimension limit. Output payload120MiB; final ZIP128MiB. Failures are reported rather than silently converted. Continuous peak memory is not guaranteed; use small batches first.
+Input alpha is ignored, including fully transparent pixels. No canvas, colour correction, resizing or source metadata is used. Originals are read, never overwritten. Treat the output as non-colour / linear data in your target application. This tool packs data; it does not configure a shader or verify an engine import.
 
-## Source and reuse
+## Format and batch limits
 
-The original modules are in `src/png.cjs` and `src/batch.cjs`; `src/page.html` is the wrapper. To reproduce the standalone page using Python3 standard library:
+- **PNG only:** 8-bit, non-interlaced grayscale, RGB, grayscale-alpha or RGBA. All three masks in each set must have the same dimensions. Palette PNGs, 16-bit PNGs, animated PNGs and other formats are rejected, not converted.
+- **Per image:** up to 4096 × 4096 and 32 MiB compressed input. Encoded PNGs also have a 32 MiB limit: noisy large images can fail below the dimension limit.
+- **Per selection:** up to 500 files and 256 MiB compressed input total. Output payload up to 120 MiB; final ZIP up to 128 MiB including metadata. Sets are processed sequentially. Reduce batch size if memory is limited; these caps are not a memory guarantee.
+- **Browser:** native `CompressionStream` and `DecompressionStream` required. Exercised on Linux with Google Chrome for Testing 145.0.7632.6 and real Gecko Firefox 157.0 (Playwright distribution), using the file chooser/file-input boundary and saved downloads. Safari, mobile platforms, other operating systems and native OS-dialog behaviour are outside this test scope.
+- **Naming:** ambiguous/case-colliding names and unsafe ZIP paths are skipped. No missing map is fabricated. Existing `_orm.png` files selected alongside sources can cause a collision exception; keep prior outputs out of your input selection.
+
+## Files and source
+
+`texture-batch.html` is the complete offline tool. `src/` contains the original PNG, grouping/ZIP and page code. `examples/` contains six small, deterministic synthetic maps, not customer files. `screenshot.png` is an actual browser capture, not a mockup. The screenshot uses a separately tested CC0 Poly Haven Metal Plate material, explicitly prepared as 8-bit PNG because its original 16-bit PNGs are outside the supported format. Third-party material maps are not included in this download.
+
+To rebuild the standalone page with Python 3 (standard library only):
 
 ```python
 from pathlib import Path
@@ -31,10 +45,10 @@ for marker, name in [('/* PNG_MODULE */', 'src/png.cjs'), ('/* BATCH_MODULE */',
 Path('texture-batch.html').write_text(page)
 ```
 
-Code and synthetic examples are offered under the included Unlicense, to the extent permissions can be granted. AI development is disclosed; no exclusive authorship or third-party rights clearance is claimed. This is an unsupported experimental snapshot, not a production reliability guarantee or a support service.
+Original code and synthetic examples are provided under the included Unlicense, without warranty. No exclusive authorship or third-party rights clearance is claimed. Poly Haven material: https://polyhaven.com/a/metal_plate, CC0: https://polyhaven.com/license.
 
-## Download and privacy notice
+## Privacy
 
-No email, payment, uploads, feedback, personal information or support requests are requested by this project. The extracted HTML processes your selected files in your browser. It has no upload endpoint, analytics, external script/font or activation check, and does not store selected files in a remote workspace.
+The extracted tool has no upload endpoint, analytics, external script/font, activation check or remote workspace. Its content security policy blocks network connections. It does not request email, payment, feedback or personal details. Selected files remain in the browser's memory until the page is closed or replaced; source files are not modified.
 
-GitHub hosts the repository and download. GitHub processes request/device data such as IP addresses under its [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). Downloading from GitHub is separate from subsequent local processing. We may inspect only aggregate release-asset download counts, not downloader identities; a count is not a unique-person, successful-use or demand measure. No additional tracking is included.
+GitHub, if used to distribute the download, processes request/device data under its [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). Download hosting is separate from local processing. Aggregate download counts are not proof of unique people, successful use or demand. No additional tracking is included.

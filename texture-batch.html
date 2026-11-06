@@ -4,21 +4,103 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
-<title>PNG ORM channel packer — free experiment</title>
+<title>PNG ORM channel packer</title>
 <style>
-:root{color-scheme:light;font-family:Verdana,sans-serif;color:#202d27;background:#f5f3eb;line-height:1.6}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:clamp(20px,5vw,64px)}header{border-top:5px solid #24543e;padding-top:20px;margin-bottom:36px}.eyebrow{font-size:.85rem;font-weight:bold;letter-spacing:.08em;text-transform:uppercase}h1{font:normal clamp(2rem,6vw,3.5rem)/1.1 Georgia,serif;margin:16px 0}h2{font-size:1.2rem;margin:24px 0 8px}p{max-width:72ch}.notice{border-bottom:1px solid #b6bfb3;padding-bottom:16px;font-size:.9rem}.mapping{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.mapping span{padding:8px 12px;border:1px solid #7e8b80}.controls{background:#e7ebe1;padding:20px;display:grid;gap:16px}label{display:block}input[type=file]{max-width:100%;font:inherit;font-size:.9rem}button,a.download{font:inherit;font-weight:bold;padding:12px 20px;border:1px solid #24543e;background:#24543e;color:#f5f3eb;cursor:pointer;text-decoration:none;display:inline-block}button:disabled{background:#d1d7cd;border-color:#839083;color:#38473d;cursor:not-allowed}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #ab430d;outline-offset:4px}#status{font-weight:bold}#groups,#issues{padding-left:24px;overflow-wrap:anywhere}#issues{color:#81361d}a[hidden]{display:none}.limits{font-size:.9rem;border-top:1px solid #b6bfb3;padding-top:16px;margin-top:32px}footer{font-size:.85rem;margin-top:32px}li{padding:4px 0}code{overflow-wrap:anywhere}input[type=checkbox]{width:18px;height:18px;vertical-align:middle}button{justify-self:start}@media(max-width:480px){main{padding:20px}.controls{padding:16px}h1{font-size:2.4rem}}
+:root{color-scheme:dark;--bg:#1a1c1e;--pane:#232629;--well:#141618;--line:#464b50;--ink:#e9ebed;--mut:#bcc1c6;--warn:#ffbe66;--focus:#8ccbff;--r:#ff8f87;--g:#6fdc8c;--b:#8fc3ff;--mono:ui-monospace,'Cascadia Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Liberation Sans',sans-serif;line-height:1.45;color:var(--ink);background:var(--bg)}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+h1{font-size:1.0625rem}h2{font-size:.9375rem}h3{font-size:.875rem}code{font-family:var(--mono);overflow-wrap:anywhere}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.note{font-size:.875rem;color:var(--mut)}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:100dvh}
+.top,.bench{display:grid;grid-template-columns:20rem minmax(0,1fr)}
+.top{background:var(--well);border-bottom:1px solid var(--line)}
+.brand,.top p{padding:.6rem 1rem}
+.brand{display:flex;flex-wrap:wrap;gap:0 .75rem;align-items:baseline;align-content:center}
+.ver{font:.8125rem var(--mono);color:var(--mut)}
+.top p{font-size:.875rem;color:var(--mut)}
+.bench{min-height:0}
+.rail{display:grid;gap:.85rem;align-content:start;padding:.85rem 1rem 1rem;background:var(--pane);border-right:1px solid var(--line)}
+.pick{display:grid;gap:.35rem}.pick label{font-size:.875rem;font-weight:600}
+input[type=file]{width:100%;max-width:100%;padding:.4rem;font:inherit;font-size:.875rem;color:var(--ink);background:var(--well);border:1px solid var(--line)}
+input::file-selector-button{min-height:2.5rem;margin-right:.6rem;padding:.35rem .8rem;font:inherit;font-weight:700;color:#141618;background:var(--ink);border:1px solid var(--ink);border-radius:2px;cursor:pointer}
+body:has(#pack:enabled) input::file-selector-button{color:var(--ink);background:transparent}
+.names code{display:block;font-size:.875rem}
+.tr{color:var(--r)}.tg{color:var(--g)}.tb{color:var(--b)}
+.rules{display:grid;gap:.3rem;font-size:.875rem;color:var(--mut)}
+.work{display:grid;grid-template-rows:minmax(0,1fr) auto;min-width:0;min-height:0}
+.review{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;min-height:0}
+.head{display:grid;gap:.15rem;padding:.7rem 1rem}
+#status{font-size:1rem;font-weight:600;overflow-wrap:anywhere}
+.panes{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);min-height:0;border-block:1px solid var(--line)}
+.pane{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}
+.pane+.pane{border-left:1px solid var(--line)}
+.pane h3{padding:.35rem 1rem;background:var(--pane);border-bottom:1px solid var(--line)}
+.pane:has(#issues:not(:empty)) h3{color:var(--warn)}
+#groups,#issues{min-height:3rem;overflow:auto;background:var(--well);font-size:.875rem;overflow-wrap:anywhere}
+#groups{font-family:var(--mono)}
+#groups li,#issues li{padding:.3rem 1rem;border-bottom:1px solid #2d3135}
+#issues li{border-left:3px solid var(--warn)}
+#groups:empty::before,#issues:empty::before{display:block;padding:.6rem 1rem;color:var(--mut)}
+#groups:empty::before{content:'No ready sets listed.'}#issues:empty::before{content:'No exceptions listed.'}
+.key{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));font-size:.875rem;border-bottom:1px solid var(--line)}
+.key li{display:flex;gap:.5rem;align-items:center;padding:.3rem 1rem}
+.key li+li{border-left:1px solid var(--line)}
+.key b{display:inline-grid;flex:none;place-items:center;width:1.5rem;height:1.5rem;font:700 .8125rem var(--mono);color:#101214}
+.cr{background:var(--r)}.cg{background:var(--g)}.cb{background:var(--b)}.ca{background:#d5d9dd}
+.inv{display:none}body:has(#invert:checked) .inv{display:inline}
+body:has(#invert:checked) .gcell{background:#26382c}
+.act,.out{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem;align-items:center;padding:.6rem 1rem}
+.act .note,.out .note{flex:1 1 16rem}
+.out{background:var(--pane);border-top:1px solid var(--line)}
+.chk{display:flex;gap:.5rem;align-items:center;min-height:2.75rem;font-size:.875rem;font-weight:600;cursor:pointer}
+input[type=checkbox]{width:1.15rem;height:1.15rem;margin:0;accent-color:var(--g)}
+#pack,.dl{display:inline-flex;justify-content:center;align-items:center;min-width:12rem;min-height:2.75rem;padding:.5rem 1.25rem;font:inherit;font-size:.9375rem;font-weight:700;color:#141618;background:var(--ink);border:1px solid var(--ink);border-radius:2px;text-decoration:none;cursor:pointer}
+#pack:enabled:hover,.dl:hover{background:#fff}
+#pack:disabled{color:var(--mut);background:transparent;border:1px dashed #7d848a;cursor:not-allowed}
+body:has(#download:not([hidden])) #pack:enabled{color:var(--ink);background:transparent}
+.pending{display:flex;align-items:center;min-height:2.75rem;font-size:.875rem;color:var(--mut)}
+#download:not([hidden])+.pending{display:none}
+.base{display:flex;flex-wrap:wrap;gap:.25rem 1.5rem;align-items:baseline;padding:.4rem 1rem;font-size:.8125rem;background:var(--well);border-top:1px solid var(--line)}
+.base details[open]{flex-basis:100%}
+summary{padding:.25rem 0;font-size:.875rem;font-weight:700;cursor:pointer}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.5rem;max-height:28dvh;padding:.4rem .25rem .6rem;overflow:auto;font-size:.875rem;color:var(--mut)}
+footer{flex:1 1 20rem;color:var(--mut)}
+@media(min-width:60rem) and (min-height:38rem){.app{height:100dvh}.rail{overflow:auto}}
+@media(max-width:59.99rem),(max-height:37.99rem){#groups,#issues{max-height:18rem}}
+@media(max-width:59.99rem){.top,.bench,.panes{grid-template-columns:minmax(0,1fr)}.top p{padding-top:0}.rail{border-right:0;border-bottom:1px solid var(--line)}.pane+.pane{border-left:0;border-top:1px solid var(--line)}.key{grid-template-columns:repeat(2,minmax(0,1fr))}.key li+li{border-left:0}.cols{grid-template-columns:minmax(0,1fr);max-height:none}}
+@media(max-width:30rem){#pack,.dl{width:100%}.key li{padding:.3rem .75rem}}
 </style>
 </head>
-<body><main>
-<header><div class="eyebrow">Free AI-developed experiment</div><h1>Pack your masks.<br>Keep the numbers.</h1><p>Combine AO, roughness and metallic masks into one PNG per material. Review the filenames first, then download the results together.</p></header>
-<p class="notice">Free experimental, AI-developed software. Not for sale. See the included README and Unlicense before use. No account, email, analytics or upload endpoint. Processing runs in this page; originals are never overwritten.</p>
-<div class="mapping" aria-label="Output channel mapping"><span>R = AO</span><span>G = roughness</span><span>B = metallic</span><span>A = 255</span></div>
-<section aria-labelledby="select-heading"><h2 id="select-heading">1. Choose your masks</h2><p>Use matching names in the same folder: <code>stone_ao.png</code>, <code>stone_roughness.png</code> and <code>stone_metallic.png</code>. Folder and material spelling must match exactly. Channel suffixes may vary in case.</p>
-<div class="controls"><label>Choose individual files from one folder (tested route)<br><input id="files" type="file" accept=".png" multiple></label><label>Or choose a folder, including subfolders (experimental and unverified)<br><input id="folder" type="file" webkitdirectory multiple></label><label><input id="invert" type="checkbox"> Invert roughness: use 255 minus the input value</label><button id="pack" disabled>Pack ready sets</button></div></section>
-<section aria-labelledby="review-heading"><h2 id="review-heading">2. Review and download</h2><p id="status" role="status" aria-live="polite">Choose a folder or files to see complete sets and exceptions.</p><ul id="groups" aria-label="Ready sets"></ul><ul id="issues" aria-label="Exceptions"></ul><a id="download" class="download" hidden download="texture-batch.zip">Download packed ZIP</a></section>
-<div class="limits"><strong>Supported in this experiment</strong><p>8-bit, non-interlaced grayscale, RGB, grayscale-alpha and RGBA PNGs, up to 4096 × 4096 and 32 MiB each. Each mask must have the same dimensions. The red input channel is used even when alpha is zero. No resizing, colour adjustment or source metadata is carried into the output.</p><p>Matched files with palette, 16-bit, animated or other unsupported PNG variants are rejected. Nonmatching filenames are ignored. Up to 500 selected files, 256 MiB total compressed input and a 128 MiB output ZIP. Large high-entropy images may exceed the encoder limit. Peak memory use is not yet measured. Requires a recent desktop browser with native compression streams; cross-browser support is not yet established.</p><p>Failed sets are skipped and explained in the ZIP report. A filename-ready set can still fail image validation. No payment or user details are requested.</p></div>
-<footer>Original AI-developed code and synthetic examples. See README for GitHub download privacy and limits; this extracted tool processes files locally. Unlicense included. Technical tests are not demand or a production reliability guarantee.</footer>
+<body>
+<div class="app">
+<header class="top"><div class="brand"><h1>PNG ORM channel packer</h1><span class="ver">Local files / v0.2</span></div><p>Combine ambient occlusion, roughness and metallic maps into one ORM PNG per material. No uploads, accounts or tracking. Processing stays in this page; your original files are never overwritten.</p></header>
+<main class="bench">
+<section class="rail" aria-labelledby="select-heading">
+<h2 id="select-heading">1. Choose your masks</h2>
+<div class="pick"><label for="files">Choose individual PNG files</label><input id="files" type="file" accept=".png" multiple aria-describedby="naming"></div>
+<p id="naming" class="note">Select the PNGs together from one folder. Each material needs three matching names:</p>
+<p class="names"><code>stone<span class="tr">_ao</span>.png</code><code>stone<span class="tg">_roughness</span>.png</code><code>stone<span class="tb">_metallic</span>.png</code></p>
+<ul class="rules"><li>Material spelling must match exactly.</li><li>Channel suffixes are case-insensitive.</li><li>Other filenames are ignored.</li><li>Keep prior <code>_orm.png</code> outputs out of your selection; they can cause a collision exception.</li><li>Start with the included synthetic examples if needed.</li></ul>
+</section>
+<div class="work">
+<section class="review" aria-labelledby="review-heading">
+<div class="head"><h2 id="review-heading">2. Review and pack</h2><p id="status" role="status" aria-live="polite">Choose files to see complete sets and any exceptions.</p></div>
+<div class="panes"><div class="pane"><h3>Ready sets</h3><ul id="groups" aria-label="Ready sets"></ul></div><div class="pane"><h3>Exceptions</h3><ul id="issues" aria-label="Exceptions"></ul></div></div>
+<ul class="key" aria-label="Output channel mapping"><li><b class="cr">R</b> AO</li><li class="gcell"><b class="cg">G</b> <span><span class="inv">255 − </span>roughness</span></li><li><b class="cb">B</b> metallic</li><li><b class="ca">A</b> 255 · opaque</li></ul>
+<div class="act"><label class="chk" for="invert"><input id="invert" type="checkbox"> Invert roughness (255 − input)</label><p class="note">Names are checked first. Image validation happens when you pack; failed sets are skipped and explained.</p><button id="pack" type="button" disabled>Pack ready sets</button></div>
+</section>
+<section class="out" aria-labelledby="download-heading">
+<h2 id="download-heading">3. Download</h2>
+<p class="note">Your ZIP contains one <code>_orm.png</code> per successful set and a text report. If every set fails, it contains only the report. Import the output as non-colour / linear data in your target application.</p>
+<a id="download" class="dl" hidden download="texture-batch.zip">Download packed ZIP</a><p class="pending">No ZIP yet. The link appears here after packing.</p>
+</section>
+</div>
 </main>
+<div class="base">
+<details><summary>Supported PNGs &amp; batch limits</summary><div class="cols"><p>8-bit, non-interlaced grayscale, RGB, grayscale-alpha and RGBA PNGs. All three maps must have identical dimensions. Input red-channel bytes are used even when alpha is zero. No resizing, colour adjustment or source metadata is carried into the output.</p><p>Palette, 16-bit and animated PNGs and other formats are not supported. Up to 4096 × 4096 and 32 MiB per input PNG; 500 selected files and 256 MiB total compressed input. Encoded PNGs also have a 32 MiB limit, so large noisy images can fail below the dimension limit. Output payload: 120 MiB. Final ZIP: 128 MiB including metadata. Reduce batch size if your browser runs short of memory; these caps are not a memory guarantee.</p><p>Requires native compression streams. Desktop Chrome and Firefox on Linux are tested; no Safari, mobile or game-engine integration is claimed. No folder selection or automatic map-name conversion. Ambiguous or case-colliding names and unsafe ZIP paths are skipped; no missing map is fabricated. Selected files remain in browser memory until the page is closed or replaced.</p></div></details>
+<footer>Original code and labelled synthetic examples. Free under the included Unlicense. See README for download-host privacy and source. No payment or personal details requested.</footer>
+</div>
+</div>
 <script>
 'use strict';
 
@@ -488,27 +570,48 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let plan = {groups:[],issues:[]};
+let selectedFiles = [];
 let downloadUrl = null;
 function clearDownload(){if(downloadUrl)URL.revokeObjectURL(downloadUrl);downloadUrl=null;$('download').hidden=true;$('download').removeAttribute('href');}
 function showList(id,items){$(id).replaceChildren(...items.map(text=>{const item=document.createElement('li');item.textContent=text;return item;}));}
 function selectFiles(input){
   clearDownload();
   const files=Array.from(input.files);
+  selectedFiles=files;
   const total=files.reduce((sum,file)=>sum+file.size,0);
   if(files.length>500||total>256*1024*1024||files.some(file=>file.size>32*1024*1024)){
     plan={groups:[],issues:['Selection exceeds the 500-file, 256 MiB total or 32 MiB per-file input limit. Choose a smaller batch.']};
   }else{plan=TextureBatch.planFiles(files);}
   showList('groups',plan.groups.map(group=>group.key+' → '+group.outputName));
   showList('issues',plan.issues);
-  $('status').textContent=files.length+' selected files; '+plan.groups.length+' filename-ready sets; '+plan.issues.length+' selection exceptions.';
+  $('status').textContent=`${files.length} selected file${files.length===1?'':'s'}; ${plan.groups.length} filename-ready set${plan.groups.length===1?'':'s'}; ${plan.issues.length} selection exception${plan.issues.length===1?'':'s'}.`;
   $('pack').disabled=!plan.groups.length;
 }
-for(const id of ['folder','files'])$(id).addEventListener('change',()=>{const other=id==='folder'?'files':'folder';$(other).value='';selectFiles($(id));});
-$('invert').addEventListener('change',()=>{clearDownload();$('status').textContent='Mapping changed. Pack the ready sets again to apply it.';});
+function refreshFiles(){
+  const input=$('files');
+  // No accepted files (including GTK cancellation): retain the prior native
+  // selection as well as Ready, failures and the existing download.
+  if(!input.files.length){
+    if(!selectedFiles.length)return;
+    const previous=new DataTransfer();
+    for(const file of selectedFiles)previous.items.add(file);
+    input.files=previous.files;
+    return;
+  }
+  selectFiles(input);
+}
+$('files').addEventListener('change',refreshFiles);
+$('files').addEventListener('cancel',()=>{
+  // Chrome accepts identical paths with fresh File objects but emits cancel.
+  // Compare identities, not metadata: corrections may retain size and mtime.
+  const input=$('files');
+  if(input.files.length!==selectedFiles.length||Array.from(input.files).some((file,i)=>file!==selectedFiles[i]))refreshFiles();
+});
+$('invert').addEventListener('change',()=>{clearDownload();$('status').textContent=plan.groups.length?'Mapping changed. Pack the ready sets again to apply it.':'Mapping changed. Choose replacement files to restore failed sets.';});
 $('pack').addEventListener('click',async()=>{
   clearDownload();
-  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
-  const entries=[];const issues=[...plan.issues];let packed=0,generatedBytes=0;
+  for(const id of ['files','invert','pack'])$(id).disabled=true;
+  const entries=[];const issues=[...plan.issues];const failedGroups=new Set();let packed=0,generatedBytes=0;
   const invertRoughness=$('invert').checked;
   try{
     for(const group of plan.groups){
@@ -520,22 +623,29 @@ $('pack').addEventListener('click',async()=>{
         const bytes=await TexturePng.encodePng(TexturePng.packOrm({...masks,invertRoughness}));
         if(generatedBytes+bytes.length>120*1024*1024)throw new Error('Batch output payload limit of 120 MiB reached; use a smaller selection');
         entries.push({name:group.outputName,bytes});generatedBytes+=bytes.length;packed++;
-      }catch(error){issues.push(group.key+': '+error.message);}
+      }catch(error){issues.push(group.key+': '+error.message);failedGroups.add(group);}
     }
-    const summary=packed+' packed; '+(plan.groups.length-packed)+' failed image sets; '+issues.length+' total exceptions.';
-    const report=['PNG ORM channel packer — experimental snapshot',summary,'R=AO, G='+(invertRoughness?'inverted roughness':'roughness')+', B=metallic, A=255','Input red values used, alpha ignored. Originals unchanged.','',...issues].join('\n');
+    const summary=`${packed} packed; ${plan.groups.length-packed} failed image set${plan.groups.length-packed===1?'':'s'}; ${issues.length} total exception${issues.length===1?'':'s'}.`;
+    const report=['PNG ORM channel packer v0.2',summary,'R=AO, G='+(invertRoughness?'inverted roughness':'roughness')+', B=metallic, A=255','Input red values used, alpha ignored. Originals unchanged.','',...issues].join('\n');
     const usedRoots=new Set(entries.map(entry=>entry.name.split('/')[0].normalize('NFC').toLowerCase()));
     let reportName='_texture-batch-report.txt';
     for(let n=1;usedRoots.has(reportName);n++)reportName='_texture-batch-report-'+n+'.txt';
     const zip=TextureBatch.makeZip([...entries,{name:reportName,bytes:new TextEncoder().encode(report)}]);
     downloadUrl=URL.createObjectURL(new Blob([zip],{type:'application/zip'}));
     $('download').href=downloadUrl;$('download').hidden=false;
-    showList('issues',issues);$('status').textContent=summary+' Download includes the exception report.';
+    $('status').textContent=summary+` ${plan.groups.length-failedGroups.size} ready set${plan.groups.length-failedGroups.size===1?' remains':'s remain'}. Download includes the exception report. Reselect corrected files to retry failed sets.`;
   }catch(error){$('status').textContent='No ZIP created: '+error.message;}
-  finally{for(const id of ['folder','files','invert'])$(id).disabled=false;$('pack').disabled=!plan.groups.length;}
+  finally{
+    plan={groups:plan.groups.filter(group=>!failedGroups.has(group)),issues};
+    showList('groups',plan.groups.map(group=>group.key+' → '+group.outputName));
+    showList('issues',plan.issues);
+    for(const id of ['files','invert'])$(id).disabled=false;$('pack').disabled=!plan.groups.length;
+  }
 });
 if(typeof CompressionStream!=='function'||typeof DecompressionStream!=='function'){
-  $('status').textContent='This browser lacks native compression streams. Try a recent desktop browser.';
-  for(const id of ['folder','files','invert','pack'])$(id).disabled=true;
+  $('status').textContent='This browser lacks native compression streams. Use a current desktop Chrome or Firefox.';
+  for(const id of ['files','invert','pack'])$(id).disabled=true;
 }
-</script></body></html>
+</script>
+</body>
+</html>
