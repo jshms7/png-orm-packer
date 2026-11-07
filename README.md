@@ -23,6 +23,8 @@ Material stems must match exactly; channel suffixes are case-insensitive. Other 
 
 Input alpha is ignored, including fully transparent pixels. No canvas, colour correction, resizing or source metadata is used. Originals are read, never overwritten. Treat the output as non-colour / linear data in your target application. This tool packs data; it does not configure a shader or verify an engine import.
 
+Using Godot 4.7? See the [ORM material setup guide](docs/godot-orm.md), with a copyable material resource and the import settings that affect channel data.
+
 ## Format and batch limits
 
 - **PNG only:** 8-bit, non-interlaced grayscale, RGB, grayscale-alpha or RGBA. All three masks in each set must have the same dimensions. Palette PNGs, 16-bit PNGs, animated PNGs and other formats are rejected, not converted.
