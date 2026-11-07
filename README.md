@@ -54,3 +54,9 @@ Original code and synthetic examples are provided under the included Unlicense, 
 The extracted tool has no upload endpoint, analytics, external script/font, activation check or remote workspace. Its content security policy blocks network connections. It does not request email, payment, feedback or personal details. Selected files remain in the browser's memory until the page is closed or replaced; source files are not modified.
 
 GitHub, if used to distribute the download, processes request/device data under its [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). Download hosting is separate from local processing. Aggregate download counts are not proof of unique people, successful use or demand. No additional tracking is included.
+
+## Watch the example
+
+This silent screen recording packs the six included example PNGs into two ORM maps and downloads the ZIP. No files are uploaded.
+
+![Pack the included stone and wood examples, then download the packed ZIP](docs/images/packing-example.gif)
